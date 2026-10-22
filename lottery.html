@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ビンゴ 抽選画面</title>
+<style>
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+  --bg: light-dark(#fff, #111);
+  --surface: light-dark(#f4f5f7, #202124);
+  --text: light-dark(#171717, #f5f5f5);
+  --border: light-dark(#dedfe3, #414248);
+  --accent: light-dark(#242424, #f0f0f0);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  padding: 16px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+main { width: min(100%, 800px); margin: 0 auto; flex: 1; display: flex; flex-direction: column; }
+header { margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+h1 { margin: 0; font-size: 1.4rem; }
+
+.info-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+/* 抽選数字の巨大表示エリア */
+.lottery-display {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 2px dashed var(--border);
+  border-radius: 20px;
+  padding: 40px;
+  margin-bottom: 20px;
+  text-align: center;
+  min-height: 250px;
+}
+#currentNumber {
+  font-size: clamp(5rem, 25vw, 12rem);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+  letter-spacing: -.03em;
+}
+.draw-label {
+  font-size: 1rem;
+  color: #888;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.action-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+button {
+  flex: 1;
+  min-height: 56px;
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 14px;
+  border: none;
+  transition: opacity .15s, transform .15s;
+}
+button:hover { opacity: .85; }
+button:active { transform: scale(.98); }
+#drawBtn {
+  background: var(--accent);
+  color: light-dark(#fff, #151515);
+}
+#resetBtn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: inherit;
+  flex: 0 0 160px;
+}
+#resetBtn.confirming {
+  background: #8b2525;
+  color: #fff;
+  border-color: #8b2525;
+}
+
+/* 履歴エリア */
+.history-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.history-panel h3 { margin: 0 0 8px 0; font-size: 0.9rem; color: #888; }
+#historyList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 100px;
+  overflow-y: auto;
+}
+.history-chip {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+#status { font-size: 0.85rem; color: #888; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>ビンゴ 抽選画面</h1>
+  <span id="status">読み込み中...</span>
+</header>
+
+<section class="info-panel" id="infoPanel">
+  基準データを確認中...
+</section>
+
+<!-- 巨大数字表示 -->
+<section class="lottery-display">
+  <div class="draw-label">抽出した番号</div>
+  <p id="currentNumber">-</p>
+</section>
+
+<div class="action-row">
+  <button id="drawBtn" type="button">番号を引く</button>
+  <button id="resetBtn" type="button">リセット</button>
+</div>
+<p id="resetHint" style="font-size:0.85rem; color:#888; min-height:1.2em; text-align:center; margin:-10px 0 16px;"></p>
+
+<div class="history-panel">
+  <h3>これまでに引いた番号の履歴</h3>
+  <div id="historyList">
+    <span style="color:#888; font-size:0.85rem;">まだ番号を引いていません</span>
+  </div>
+</div>
+</main>
+
+<script>
+'use strict';
+
+const statusEl = document.getElementById('status');
+const infoPanel = document.getElementById('infoPanel');
+const currentNumberEl = document.getElementById('currentNumber');
+const drawBtn = document.getElementById('drawBtn');
+const resetBtn = document.getElementById('resetBtn');
+const resetHint = document.getElementById('resetHint');
+const historyList = document.getElementById('historyList');
+
+const STORAGE_KEY_LOTTERY = 'bingo_lottery_state_v1';
+
+let maxNumber = 99;
+let availableNumbers = [];
+let drawnHistory = [];
+
+let resetClicks = 0;
+const RESET_REQUIRED = 5; // 5回タップが必要
+
+// 状態を localStorage に保存
+function saveLotteryState() {
+  try {
+    const state = {
+      maxNumber,
+      availableNumbers,
+      drawnHistory
+    };
+    localStorage.setItem(STORAGE_KEY_LOTTERY, JSON.stringify(state));
+  } catch (e) {
+    console.error('Failed to save lottery state:', e);
+  }
+}
+
+// 状態を localStorage から読み込み
+function loadLotteryState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_LOTTERY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Failed to load lottery state:', e);
+  }
+  return null;
+}
+
+// 状態を削除
+function clearLotteryState() {
+  try {
+    localStorage.removeItem(STORAGE_KEY_LOTTERY);
+  } catch (e) {}
+}
+
+// 初期化（サーバーから最大値決定 ＆ キャッシュ復元）
+async function initLottery() {
+  try {
+    const res = await fetch('/api/get_all');
+    if (!res.ok) throw new Error('Failed to fetch');
+    const allData = await res.json();
+    
+    let maxSide = 0;
+    let bestSheet = null;
+    let bestId = null;
+
+    Object.keys(allData).forEach(id => {
+      const sheet = allData[id];
+      if (sheet && sheet.side > maxSide) {
+        maxSide = sheet.side;
+        bestSheet = sheet;
+        bestId = id;
+      }
+    });
+
+    if (bestSheet && Array.isArray(bestSheet.values)) {
+      maxNumber = Math.max(...bestSheet.values);
+      infoPanel.textContent = `基準シート: ID ${bestId} (サイズ ${maxSide} × ${maxSide}) ｜ 範囲: 0 〜 ${maxNumber}`;
+    } else {
+      maxNumber = 99;
+      infoPanel.textContent = `有効なシートが見つからないため、デフォルト範囲 (0 〜 99) で抽選します。`;
+    }
+  } catch (err) {
+    maxNumber = 99;
+    infoPanel.textContent = `データ取得エラー（デフォルト範囲 0 〜 99 で動作します）`;
+  }
+
+  // 保存された状態があれば復元、なければ新規初期化
+  const savedState = loadLotteryState();
+  if (savedState && typeof savedState.maxNumber === 'number') {
+    maxNumber = savedState.maxNumber;
+    availableNumbers = savedState.availableNumbers || [];
+    drawnHistory = savedState.drawnHistory || [];
+    
+    if (drawnHistory.length > 0) {
+      currentNumberEl.textContent = drawnHistory[0];
+    } else {
+      currentNumberEl.textContent = '-';
+    }
+    updateHistoryUI();
+  } else {
+    resetAvailableNumbers();
+  }
+
+  statusEl.textContent = '準備完了';
+}
+
+// 利用可能な番号リストを初期化 (0 〜 maxNumber)
+function resetAvailableNumbers() {
+  availableNumbers = Array.from({ length: maxNumber + 1 }, (_, i) => i);
+  drawnHistory = [];
+  currentNumberEl.textContent = '-';
+  updateHistoryUI();
+  saveLotteryState();
+}
+
+// 番号を引く
+function drawNumber() {
+  if (availableNumbers.length === 0) {
+    alert('すべての番号を抽出し尽くしました！');
+    return;
+  }
+
+  const randomIndex = Math.floor(Math.random() * availableNumbers.length);
+  const drawn = availableNumbers.splice(randomIndex, 1)[0];
+
+  drawnHistory.unshift(drawn);
+  currentNumberEl.textContent = drawn;
+  updateHistoryUI();
+  saveLotteryState();
+}
+
+// 履歴UIの更新
+function updateHistoryUI() {
+  historyList.replaceChildren();
+  if (drawnHistory.length === 0) {
+    historyList.innerHTML = '<span style="color:#888; font-size:0.85rem;">まだ番号を引いていません</span>';
+    return;
+  }
+
+  drawnHistory.forEach(num => {
+    const chip = document.createElement('span');
+    chip.className = 'history-chip';
+    chip.textContent = num;
+    historyList.appendChild(chip);
+  });
+}
+
+// リセットボタンの処理（5回タップ必須）
+function handleReset() {
+  resetClicks++;
+  const remaining = RESET_REQUIRED - resetClicks;
+
+  if (resetClicks < RESET_REQUIRED) {
+    resetBtn.textContent = `リセット (${resetClicks}/${RESET_REQUIRED})`;
+    resetHint.textContent = `リセットするにはあと${remaining}回押してください。`;
+    resetBtn.classList.add('confirming');
+  } else {
+    clearLotteryState();
+    resetAvailableNumbers();
+    resetClicks = 0;
+    resetBtn.textContent = 'リセット';
+    resetHint.textContent = '';
+    resetBtn.classList.remove('confirming');
+  }
+}
+
+drawBtn.addEventListener('click', drawNumber);
+resetBtn.addEventListener('click', handleReset);
+
+// 初期化実行
+initLottery();
+</script>
+</body>
+</html>

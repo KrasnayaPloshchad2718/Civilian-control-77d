@@ -52,6 +52,13 @@ async def delete_data(id: int = Query(...)):
     return {"status": "deleted", "id": id}
   return {"status": "not_found", "id": id}
 
+@app.get("/lottery", response_class=HTMLResponse)
+async def get_lottery():
+  """'/lottery' で lottery.html を返す"""
+  if os.path.exists("lottery.html"):
+    with open("lottery.html", "r", encoding="utf-8") as f:
+      return f.read()
+  raise HTTPException(status_code=404, detail="lottery.html not found")
 
 if __name__ == "__main__":
   import uvicorn
