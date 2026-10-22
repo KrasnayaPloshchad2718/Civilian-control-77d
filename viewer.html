@@ -84,6 +84,8 @@ h1 { margin: 0; font-size: 1.4rem; }
 }
 .marked-chip:hover { background: var(--border); }
 .marked-chip.active { background: #8b2525; color: #fff; border-color: #8b2525; }
+/* 破られた数字リスト内で未選出（不正）の数字を赤く表示 */
+.marked-chip.cheated { background: #8b2525 !important; color: #fff !important; border-color: #ff4d4d !important; }
 
 .ranking-list {
   display: flex;
@@ -290,11 +292,12 @@ let lotteryHistoryMap = {};
 let currentModalId = null;
 let selectedSearchNumber = null;
 
+// インデックスから数値を厳密に算出（一番最後のマスを含むすべての境界値を正しく処理）
 function getNumberFromIndex(n, values, index) {
   const hasFree = n % 2 === 1;
   const freeIndex = hasFree ? Math.floor((n * n) / 2) : -1;
   if (index === freeIndex) return 'FREE';
-  const valIndex = index > freeIndex ? index - 1 : index;
+  const valIndex = (freeIndex !== -1 && index > freeIndex) ? index - 1 : index;
   return values[valIndex];
 }
 
@@ -407,9 +410,8 @@ function renderAll() {
 
     if (Array.isArray(marked)) {
       marked.forEach(idx => {
-        // インデックスを実際の数字に変換して集約
         const num = getNumberFromIndex(n, values, idx);
-        if (num !== 'FREE') {
+        if (num !== undefined && num !== 'FREE') {
           globalMarkedSet.add(Number(num));
           cardMarkedNumbers.add(Number(num));
         }
@@ -523,6 +525,7 @@ function renderAll() {
     });
   }
 
+  // 破られた数字のチップ一覧生成（未選出数字は cheated クラスで赤色表示）
   markedNumbersList.replaceChildren();
   if (globalMarkedSet.size === 0) {
     markedNumbersList.innerHTML = '<span style="color: #888; font-size: 0.85rem;">まだ破られた数字はありません</span>';
@@ -530,7 +533,15 @@ function renderAll() {
     const sortedNums = Array.from(globalMarkedSet).sort((a, b) => a - b);
     sortedNums.forEach(num => {
       const chip = document.createElement('span');
-      chip.className = 'marked-chip' + (selectedSearchNumber === num ? ' active' : '');
+      let chipClass = 'marked-chip';
+      if (selectedSearchNumber === num) chipClass += ' active';
+      
+      // まだ抽選されていない数字であれば赤色表示にする
+      if (!officialDrawnSet.has(num) && !officialDrawnSet.has(String(num))) {
+        chipClass += ' cheated';
+      }
+
+      chip.className = chipClass;
       chip.textContent = num;
       chip.addEventListener('click', () => {
         if (selectedSearchNumber === num) clearSearch();
