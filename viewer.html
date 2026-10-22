@@ -25,23 +25,56 @@ main { width: min(100%, 1200px); margin: 0 auto; }
 header { margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
 h1 { margin: 0; font-size: 1.4rem; }
 
-/* 破られた数字の一覧パネル */
+/* 破られた数字の一覧・検索パネル */
 .global-marked-panel {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 12px 16px;
+  padding: 14px 16px;
   margin-bottom: 20px;
 }
+.panel-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
 .global-marked-panel h3 {
-  margin: 0 0 8px 0;
+  margin: 0;
   font-size: 0.95rem;
+}
+.search-box {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.search-box input {
+  width: 110px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+}
+.search-box button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: light-dark(#fff, #151515);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }
 #markedNumbersList {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  max-height: 100px;
+  max-height: 120px;
   overflow-y: auto;
 }
 .marked-chip {
@@ -51,6 +84,16 @@ h1 { margin: 0; font-size: 1.4rem; }
   border-radius: 6px;
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.marked-chip:hover {
+  background: var(--border);
+}
+.marked-chip.active {
+  background: #8b2525;
+  color: #fff;
+  border-color: #8b2525;
 }
 
 /* カードグリッド */
@@ -166,13 +209,20 @@ h1 { margin: 0; font-size: 1.4rem; }
 <body>
 <main>
 <header>
-  <h1>ビンゴ ビューアー (全ID一括)</h1>
+  <h1>ビンゴ ビューアー</h1>
   <span id="status">読み込み中...</span>
 </header>
 
-<!-- 画面上部：現在破られている数字の一覧 -->
+<!-- 画面上部：破られた数字の一覧 & 検索パネル -->
 <section class="global-marked-panel">
-  <h3>現在破られている数字の一覧 (全体)</h3>
+  <div class="panel-top">
+    <h3>破られている数字（タップでその数字を持つIDを検索）</h3>
+    <div class="search-box">
+      <input type="number" id="searchInput" placeholder="数字を入力" min="0">
+      <button id="searchBtn" type="button">検索</button>
+      <button id="clearSearchBtn" type="button" style="background:var(--surface); border:1px solid var(--border);">解除</button>
+    </div>
+  </div>
   <div id="markedNumbersList">
     <span style="color: #888; font-size: 0.85rem;">データがありません</span>
   </div>
@@ -201,6 +251,10 @@ h1 { margin: 0; font-size: 1.4rem; }
 const statusEl = document.getElementById('status');
 const cardsGrid = document.getElementById('cardsGrid');
 const markedNumbersList = document.getElementById('markedNumbersList');
+const searchInput = document.getElementById('searchInput');
+const searchBtn = document.getElementById('searchBtn');
+const clearSearchBtn = document.getElementById('clearSearchBtn');
+
 const modal = document.getElementById('modal');
 const closeModalBtn = document.getElementById('closeModal');
 const modalTitle = document.getElementById('modalTitle');
@@ -208,8 +262,9 @@ const modalBoard = document.getElementById('modalBoard');
 
 let allData = {};
 let currentModalId = null;
+let selectedSearchNumber = null; // 検索で選択されている数字
 
-// セルのインデックスから実際の数値を逆算するヘルパー
+// セルのインデックスから実際の数値を逆算
 function getNumberFromIndex(n, values, index) {
   const hasFree = n % 2 === 1;
   const freeIndex = hasFree ? Math.floor((n * n) / 2) : -1;
@@ -218,7 +273,7 @@ function getNumberFromIndex(n, values, index) {
   return values[valIndex];
 }
 
-// ビンゴ数（揃った列の数）を計算する関数
+// ビンゴ数計算
 function calculateBingoCount(side, marked, hasFree) {
   let count = 0;
   const n = side;
@@ -229,7 +284,6 @@ function calculateBingoCount(side, marked, hasFree) {
     return Array.isArray(marked) && marked.includes(idx);
   }
 
-  // 横列
   for (let r = 0; r < n; r++) {
     let line = true;
     for (let c = 0; c < n; c++) {
@@ -238,7 +292,6 @@ function calculateBingoCount(side, marked, hasFree) {
     if (line) count++;
   }
 
-  // 縦列
   for (let c = 0; c < n; c++) {
     let line = true;
     for (let r = 0; r < n; r++) {
@@ -247,14 +300,12 @@ function calculateBingoCount(side, marked, hasFree) {
     if (line) count++;
   }
 
-  // 斜め1（左上->右下）
   let diag1 = true;
   for (let i = 0; i < n; i++) {
     if (!isMarked(i * n + i)) { diag1 = false; break; }
   }
   if (diag1) count++;
 
-  // 斜め2（右上->左下）
   let diag2 = true;
   for (let i = 0; i < n; i++) {
     if (!isMarked(i * n + (n - 1 - i))) { diag2 = false; break; }
@@ -264,7 +315,7 @@ function calculateBingoCount(side, marked, hasFree) {
   return count;
 }
 
-// サーバーから全データを取得
+// データ取得
 async function fetchAllData() {
   try {
     const res = await fetch('/api/get_all');
@@ -277,7 +328,7 @@ async function fetchAllData() {
   }
 }
 
-// 画面全体の描画
+// 全体描画
 function renderAll() {
   cardsGrid.replaceChildren();
   
@@ -289,8 +340,8 @@ function renderAll() {
     return;
   }
 
-  // 全カードでマークされている数字を収集
   const globalMarkedSet = new Set();
+  const matchedIds = new Set();
 
   ids.forEach(id => {
     const data = allData[id];
@@ -298,57 +349,72 @@ function renderAll() {
 
     const { side: n, values, marked } = data;
     const hasFree = n % 2 === 1;
+    const cardMarkedNumbers = new Set();
 
-    // マークされた数字を集約
     if (Array.isArray(marked)) {
       marked.forEach(idx => {
         const num = getNumberFromIndex(n, values, idx);
-        if (num !== 'FREE') globalMarkedSet.add(num);
+        if (num !== 'FREE') {
+          globalMarkedSet.add(num);
+          cardMarkedNumbers.add(num);
+        }
       });
     }
 
-    const bingoCount = calculateBingoCount(n, marked, hasFree);
-
-    // カード要素の作成
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.addEventListener('click', () => openModal(id));
-
-    const cardHeader = document.createElement('div');
-    cardHeader.className = 'card-header';
-    cardHeader.innerHTML = `
-      <span>ID: ${id} (${n}×${n})</span>
-      <span class="bingo-badge">ビンゴ: ${bingoCount}</span>
-    `;
-    card.appendChild(cardHeader);
-
-    // ミニボード作成
-    const miniBoard = document.createElement('div');
-    miniBoard.className = 'mini-board';
-    miniBoard.style.gridTemplateColumns = `repeat(${n}, minmax(0, 1fr))`;
-
-    let valueIndex = 0;
-    for (let i = 0; i < n * n; i++) {
-      const isFree = hasFree && i === Math.floor((n * n) / 2);
-      const miniCell = document.createElement('div');
-      miniCell.className = 'mini-cell' + (isFree ? ' free' : '');
-
-      if (isFree) {
-        miniCell.textContent = 'F';
-      } else {
-        const val = values[valueIndex++];
-        miniCell.textContent = val;
-        if (Array.isArray(marked) && marked.includes(i)) {
-          miniCell.classList.add('marked');
-        }
-      }
-      miniBoard.appendChild(miniCell);
+    // 検索フィルター条件チェック
+    let matchesSearch = true;
+    if (selectedSearchNumber !== null) {
+      matchesSearch = cardMarkedNumbers.has(selectedSearchNumber);
     }
-    card.appendChild(miniBoard);
-    cardsGrid.appendChild(card);
+
+    if (matchesSearch) {
+      matchedIds.add(id);
+
+      const bingoCount = calculateBingoCount(n, marked, hasFree);
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.addEventListener('click', () => openModal(id));
+
+      const cardHeader = document.createElement('div');
+      cardHeader.className = 'card-header';
+      cardHeader.innerHTML = `
+        <span>ID: ${id} (${n}×${n})</span>
+        <span class="bingo-badge">ビンゴ: ${bingoCount}</span>
+      `;
+      card.appendChild(cardHeader);
+
+      const miniBoard = document.createElement('div');
+      miniBoard.className = 'mini-board';
+      miniBoard.style.gridTemplateColumns = `repeat(${n}, minmax(0, 1fr))`;
+
+      let valueIndex = 0;
+      for (let i = 0; i < n * n; i++) {
+        const isFree = hasFree && i === Math.floor((n * n) / 2);
+        const miniCell = document.createElement('div');
+        miniCell.className = 'mini-cell' + (isFree ? ' free' : '');
+
+        if (isFree) {
+          miniCell.textContent = 'F';
+        } else {
+          const val = values[valueIndex++];
+          miniCell.textContent = val;
+          if (Array.isArray(marked) && marked.includes(i)) {
+            miniCell.classList.add('marked');
+          }
+        }
+        miniBoard.appendChild(miniCell);
+      }
+      card.appendChild(miniBoard);
+      cardsGrid.appendChild(card);
+    }
   });
 
-  // 画面上部の破られた数字一覧を描画（数値順にソート）
+  if (cardsGrid.children.length === 0) {
+    cardsGrid.innerHTML = `<p style="color:#888; grid-column: 1/-1;">数字「${selectedSearchNumber}」が破られているカードは見つかりませんでした。</p>`;
+  }
+
+  // 破られた数字の一覧チップ描画
   markedNumbersList.replaceChildren();
   if (globalMarkedSet.size === 0) {
     markedNumbersList.innerHTML = '<span style="color: #888; font-size: 0.85rem;">まだ破られた数字はありません</span>';
@@ -356,19 +422,51 @@ function renderAll() {
     const sortedNums = Array.from(globalMarkedSet).sort((a, b) => a - b);
     sortedNums.forEach(num => {
       const chip = document.createElement('span');
-      chip.className = 'marked-chip';
+      chip.className = 'marked-chip' + (selectedSearchNumber === num ? ' active' : '');
       chip.textContent = num;
+      chip.addEventListener('click', () => {
+        if (selectedSearchNumber === num) {
+          clearSearch();
+        } else {
+          selectedSearchNumber = num;
+          searchInput.value = num;
+          renderAll();
+        }
+      });
       markedNumbersList.appendChild(chip);
     });
   }
 
-  // もしモーダルが開いている場合は、中身もリアルタイム更新
   if (currentModalId !== null && allData[currentModalId]) {
     updateModalContent(allData[currentModalId]);
   }
 }
 
-// モーダルを開く
+// 検索実行
+function executeSearch() {
+  const val = searchInput.value.trim();
+  if (val === '') {
+    clearSearch();
+    return;
+  }
+  selectedSearchNumber = Number.parseInt(val, 10);
+  renderAll();
+}
+
+// 検索解除
+function clearSearch() {
+  selectedSearchNumber = null;
+  searchInput.value = '';
+  renderAll();
+}
+
+searchBtn.addEventListener('click', executeSearch);
+clearSearchBtn.addEventListener('click', clearSearch);
+searchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') executeSearch();
+});
+
+// モーダル操作
 function openModal(id) {
   currentModalId = id;
   const data = allData[id];
@@ -379,7 +477,6 @@ function openModal(id) {
   modal.hidden = false;
 }
 
-// モーダルの中身を更新
 function updateModalContent(data) {
   const { side: n, values, marked } = data;
   modalBoard.replaceChildren();
@@ -406,7 +503,6 @@ function updateModalContent(data) {
   }
 }
 
-// モーダルを閉じる
 closeModalBtn.addEventListener('click', () => {
   modal.hidden = true;
   currentModalId = null;
@@ -414,11 +510,12 @@ closeModalBtn.addEventListener('click', () => {
 
 modal.addEventListener('click', (e) => {
   if (e.target === modal) {
-    modal.hidden = false; // モーダル背景クリック時も必要に応じて閉じられるように
+    modal.hidden = true;
+    currentModalId = null;
   }
 });
 
-// 初回取得 & 2秒ごとのポーリング
+// 初回取得 & ポーリング
 fetchAllData();
 setInterval(fetchAllData, 2000);
 </script>
