@@ -172,9 +172,9 @@ const historyList = document.getElementById('historyList');
 
 const STORAGE_KEY_LOTTERY = 'bingo_lottery_state_v2';
 
-let maxNumber = 75; // デフォルト
+let maxNumber = 75;
 let availableNumbers = [];
-let drawnHistory = [];
+let drawnHistory = []; // { num: 番号, time: "HH:MM:SS" }
 
 let resetClicks = 0;
 const RESET_REQUIRED = 5;
@@ -183,6 +183,14 @@ function saveLotteryState() {
   try {
     const state = { maxNumber, availableNumbers, drawnHistory };
     localStorage.setItem(STORAGE_KEY_LOTTERY, JSON.stringify(state));
+
+    // サーバーにアップロード
+    fetch('/api/lottery/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state)
+    }).catch(err => console.error('Lottery sync failed:', err));
+
   } catch (e) {
     console.error('Failed to save lottery state:', e);
   }
@@ -201,6 +209,11 @@ function loadLotteryState() {
 function clearLotteryState() {
   try {
     localStorage.removeItem(STORAGE_KEY_LOTTERY);
+    fetch('/api/lottery/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ maxNumber, availableNumbers: Array.from({length: maxNumber+1}, (_, i) => i), drawnHistory: [] })
+    }).catch(e => {});
   } catch (e) {}
 }
 
@@ -216,7 +229,6 @@ async function initLottery() {
     let bestSheet = null;
     let bestId = null;
 
-    // 最もマス目数（サイズ）が大きい用紙を探す
     Object.keys(allData).forEach(id => {
       const sheet = allData[id];
       if (sheet && sheet.side > maxSide) {
@@ -227,7 +239,6 @@ async function initLottery() {
     });
 
     if (bestSheet && typeof bestSheet.side === 'number') {
-      // ご要望通り「最大使われる可能性がある数字」＝ マス総数の3倍 (side * side * 3) を上限とする
       calculatedMaxNumber = bestSheet.side * bestSheet.side * 3;
       infoPanel.textContent = `基準シート: ID ${bestId} (サイズ ${bestSheet.side} × ${bestSheet.side}) ｜ 範囲: 0 〜 ${calculatedMaxNumber}`;
     } else {
@@ -239,20 +250,18 @@ async function initLottery() {
 
   const savedState = loadLotteryState();
   
-  // 保存されているデータがある場合でも、サイズ変更等で上限が変わっていればリフレッシュするかチェック
   if (savedState && typeof savedState.maxNumber === 'number' && savedState.maxNumber === calculatedMaxNumber) {
     maxNumber = savedState.maxNumber;
     availableNumbers = savedState.availableNumbers || [];
     drawnHistory = savedState.drawnHistory || [];
     
     if (drawnHistory.length > 0) {
-      currentNumberEl.textContent = drawnHistory[0];
+      currentNumberEl.textContent = drawnHistory[0].num;
     } else {
       currentNumberEl.textContent = '-';
     }
     updateHistoryUI();
   } else {
-    // 最大値が変わっている、または保存データがない場合は新しく初期化
     maxNumber = calculatedMaxNumber;
     resetAvailableNumbers();
   }
@@ -277,7 +286,10 @@ function drawNumber() {
   const randomIndex = Math.floor(Math.random() * availableNumbers.length);
   const drawn = availableNumbers.splice(randomIndex, 1)[0];
 
-  drawnHistory.unshift(drawn);
+  const now = new Date();
+  const timeStr = now.toTimeString().split(' ')[0]; // "HH:MM:SS"
+
+  drawnHistory.unshift({ num: drawn, time: timeStr });
   currentNumberEl.textContent = drawn;
   updateHistoryUI();
   saveLotteryState();
@@ -290,10 +302,10 @@ function updateHistoryUI() {
     return;
   }
 
-  drawnHistory.forEach(num => {
+  drawnHistory.forEach(item => {
     const chip = document.createElement('span');
     chip.className = 'history-chip';
-    chip.textContent = num;
+    chip.textContent = item.num;
     historyList.appendChild(chip);
   });
 }

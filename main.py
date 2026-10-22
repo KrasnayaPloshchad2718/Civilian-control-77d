@@ -2,10 +2,11 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 import os
 
-app = FastAPI()
+app = FastAPI
 
-# データをメモリ上に保存する辞書 { 10: { ... }, 11: { ... } }
+# データを保存するメモリ上のストア
 bingo_data_store = {}
+lottery_data_store = {"drawnHistory": [], "maxNumber": 75}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -24,6 +25,14 @@ async def get_viewer():
   raise HTTPException(status_code=404, detail="viewer.html not found")
 
 
+@app.get("/lottery", response_class=HTMLResponse)
+async def get_lottery():
+  if os.path.exists("lottery.html"):
+    with open("lottery.html", "r", encoding="utf-8") as f:
+      return f.read()
+  raise HTTPException(status_code=404, detail="lottery.html not found")
+
+
 @app.post("/api/upload")
 async def upload_data(id: int = Query(...), data: dict = None):
   if not id:
@@ -32,33 +41,31 @@ async def upload_data(id: int = Query(...), data: dict = None):
   return {"status": "success", "id": id}
 
 
-@app.get("/api/get")
-async def get_data(id: int = Query(...)):
-  if id in bingo_data_store:
-    return bingo_data_store[id]
-  raise HTTPException(status_code=404, detail=f"No data found for ID: {id}")
-
-
-@app.get("/api/get_all")
-async def get_all_data():
-  """0〜99すべての保存データを一括返却"""
-  return bingo_data_store
-
 @app.delete("/api/delete")
 async def delete_data(id: int = Query(...)):
-  """指定されたIDのデータを削除"""
   if id in bingo_data_store:
     del bingo_data_store[id]
     return {"status": "deleted", "id": id}
   return {"status": "not_found", "id": id}
 
-@app.get("/lottery", response_class=HTMLResponse)
+
+@app.get("/api/get_all")
+async def get_all_data():
+  return bingo_data_store
+
+
+# 抽選データ同期用API
+@app.post("/api/lottery/upload")
+async def upload_lottery(data: dict = None):
+  global lottery_data_store
+  lottery_data_store = data
+  return {"status": "success"}
+
+
+@app.get("/api/lottery/get")
 async def get_lottery():
-  """'/lottery' で lottery.html を返す"""
-  if os.path.exists("lottery.html"):
-    with open("lottery.html", "r", encoding="utf-8") as f:
-      return f.read()
-  raise HTTPException(status_code=404, detail="lottery.html not found")
+  return lottery_data_store
+
 
 if __name__ == "__main__":
   import uvicorn

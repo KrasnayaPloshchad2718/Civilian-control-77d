@@ -25,7 +25,6 @@ main { width: min(100%, 1200px); margin: 0 auto; }
 header { margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
 h1 { margin: 0; font-size: 1.4rem; }
 
-/* パネル共通 */
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -41,10 +40,7 @@ h1 { margin: 0; font-size: 1.4rem; }
   gap: 10px;
   margin-bottom: 10px;
 }
-.panel h3 {
-  margin: 0;
-  font-size: 0.95rem;
-}
+.panel h3 { margin: 0; font-size: 0.95rem; }
 .search-box {
   display: flex;
   gap: 6px;
@@ -89,7 +85,6 @@ h1 { margin: 0; font-size: 1.4rem; }
 .marked-chip:hover { background: var(--border); }
 .marked-chip.active { background: #8b2525; color: #fff; border-color: #8b2525; }
 
-/* ランキングエリア */
 .ranking-list {
   display: flex;
   flex-direction: column;
@@ -112,12 +107,8 @@ h1 { margin: 0; font-size: 1.4rem; }
   gap: 12px;
   align-items: center;
 }
-.rank-badge {
-  font-weight: 700;
-  min-width: 24px;
-}
+.rank-badge { font-weight: 700; min-width: 24px; }
 
-/* カードグリッド */
 .cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -148,11 +139,7 @@ h1 { margin: 0; font-size: 1.4rem; }
   font-size: 0.8rem;
 }
 
-/* ミニボード */
-.mini-board {
-  display: grid;
-  gap: 3px;
-}
+.mini-board { display: grid; gap: 3px; }
 .mini-cell {
   aspect-ratio: 1;
   display: flex;
@@ -165,8 +152,9 @@ h1 { margin: 0; font-size: 1.4rem; }
 }
 .mini-cell.free { font-size: 0.5rem; font-weight: bold; background: var(--border); }
 .mini-cell.marked { background: light-dark(#e7e7e7, #343434); color: light-dark(#666, #bbb); text-decoration: line-through; }
+/* 不正検知されたマーク（プレイヤーには見えないがビューアーで赤くする） */
+.mini-cell.cheated { background: #8b2525 !important; color: #fff !important; border-color: #ff4d4d !important; }
 
-/* モーダル */
 .modal {
   position: fixed;
   inset: 0;
@@ -202,10 +190,7 @@ h1 { margin: 0; font-size: 1.4rem; }
   cursor: pointer;
   font-weight: 600;
 }
-.full-board {
-  display: grid;
-  gap: 5px;
-}
+.full-board { display: grid; gap: 5px; }
 .full-cell {
   aspect-ratio: 1;
   display: flex;
@@ -217,12 +202,9 @@ h1 { margin: 0; font-size: 1.4rem; }
   font-size: clamp(0.8rem, 2.5vw, 1.2rem);
 }
 .full-cell.free { background: var(--surface); font-size: 0.75rem; font-weight: 700; }
-.full-cell.marked {
-  background: light-dark(#e7e7e7, #343434);
-  color: light-dark(#666, #bbb);
-  border-style: dashed;
-}
+.full-cell.marked { background: light-dark(#e7e7e7, #343434); color: light-dark(#666, #bbb); border-style: dashed; }
 .full-cell.marked span { text-decoration: line-through; }
+.full-cell.cheated { background: #8b2525 !important; color: #fff !important; border-color: #ff4d4d !important; }
 
 #status { font-size: 0.85rem; color: #888; }
 </style>
@@ -234,7 +216,6 @@ h1 { margin: 0; font-size: 1.4rem; }
   <span id="status">読み込み中...</span>
 </header>
 
-<!-- 破られた数字の一覧 & 検索パネル -->
 <section class="panel">
   <div class="panel-top">
     <h3>破られている数字（タップでその数字を持つIDを検索）</h3>
@@ -249,7 +230,6 @@ h1 { margin: 0; font-size: 1.4rem; }
   </div>
 </section>
 
-<!-- ランキング機能パネル -->
 <section class="panel">
   <div class="panel-top">
     <h3>ビンゴ ランキング</h3>
@@ -273,13 +253,9 @@ h1 { margin: 0; font-size: 1.4rem; }
   </div>
 </section>
 
-<!-- カード一覧グリッド -->
-<section id="cardsGrid" class="cards-grid">
-  <!-- 動的生成 -->
-</section>
+<section id="cardsGrid" class="cards-grid"></section>
 </main>
 
-<!-- 拡大モーダル -->
 <div id="modal" class="modal" hidden>
   <div class="modal-content">
     <div class="modal-header">
@@ -310,10 +286,11 @@ const modalTitle = document.getElementById('modalTitle');
 const modalBoard = document.getElementById('modalBoard');
 
 let allData = {};
+let officialDrawnSet = new Set(); // サーバーから取得した正式な抽選数字のセット
+let lotteryHistoryMap = {}; // 抽選された時刻のマップ { 数字: 時刻文字列 }
 let currentModalId = null;
 let selectedSearchNumber = null;
 
-// セルのインデックスから実際の数値を逆算
 function getNumberFromIndex(n, values, index) {
   const hasFree = n % 2 === 1;
   const freeIndex = hasFree ? Math.floor((n * n) / 2) : -1;
@@ -322,12 +299,10 @@ function getNumberFromIndex(n, values, index) {
   return values[valIndex];
 }
 
-// ビンゴ数および、各ビンゴ数を何個目のマークで達成したかをシミュレーション計算する関数
-function analyzeBingoProgress(side, marked, hasFree) {
+function analyzeBingoProgress(side, marked, values, hasFree) {
   const n = side;
   const freeIndex = hasFree ? Math.floor((n * n) / 2) : -1;
 
-  // すべてのラインの定義（インデックスの配列のリスト）
   const lines = [];
   for (let r = 0; r < n; r++) {
     const line = [];
@@ -347,8 +322,7 @@ function analyzeBingoProgress(side, marked, hasFree) {
   for (let i = 0; i < n; i++) diag2.push(i * n + (n - 1 - i));
   lines.push(diag2);
 
-  // marked の順序をそのまま適用していき、各ビンゴ数が何手目で完成したかを記録する
-  const achievedAtStep = {}; // { 1: 手数, 2: 手数, ... }
+  const achievedAtTime = {}; // { 1: "HH:MM:SS", ... }
   const currentMarked = new Set();
   if (freeIndex !== -1) currentMarked.add(freeIndex);
 
@@ -359,32 +333,48 @@ function analyzeBingoProgress(side, marked, hasFree) {
     const idx = markedList[step];
     currentMarked.add(idx);
 
-    // 現在のビンゴ数を再計算
+    const num = getNumberFromIndex(n, values, idx);
+    const drawTime = lotteryHistoryMap[num] || null;
+
     let newCount = 0;
     lines.forEach(line => {
       if (line.every(i => currentMarked.has(i))) newCount++;
     });
 
-    // 新たに達成したビンゴ数があれば、その最初の手数を記録
     for (let b = currentBingoCount + 1; b <= newCount; b++) {
-      if (!achievedAtStep[b]) {
-        achievedAtStep[b] = step + 1; // 1手目、2手目...
+      if (!achievedAtTime[b]) {
+        achievedAtTime[b] = drawTime; // 最初にそのビンゴ数に到達したときの抽選時刻
       }
     }
     currentBingoCount = newCount;
   }
 
-  return {
-    bingoCount: currentBingoCount,
-    achievedAtStep
-  };
+  return { bingoCount: currentBingoCount, achievedAtTime };
 }
 
 async function fetchAllData() {
   try {
-    const res = await fetch('/api/get_all');
-    if (!res.ok) throw new Error('Failed to fetch');
-    allData = await res.json();
+    // ビンゴデータと抽選データを並行取得
+    const [resCards, resLottery] = await Promise.all([
+      fetch('/api/get_all'),
+      fetch('/api/lottery/get')
+    ]);
+
+    if (!resCards.ok) throw new Error('Failed to fetch cards');
+    allData = await resCards.json();
+
+    if (resLottery.ok) {
+      const lotteryData = await resLottery.json();
+      officialDrawnSet.clear();
+      lotteryHistoryMap = {};
+      if (Array.isArray(lotteryData.drawnHistory)) {
+        lotteryData.drawnHistory.forEach(item => {
+          officialDrawnSet.add(item.num);
+          lotteryHistoryMap[item.num] = item.time;
+        });
+      }
+    }
+
     renderAll();
     statusEl.textContent = `最終更新: ${new Date().toLocaleTimeString()} (自動更新中)`;
   } catch (err) {
@@ -426,7 +416,7 @@ function renderAll() {
       });
     }
 
-    const progress = analyzeBingoProgress(n, marked, hasFree);
+    const progress = analyzeBingoProgress(n, marked, values, hasFree);
 
     cardStats.push({
       id,
@@ -435,29 +425,27 @@ function renderAll() {
       marked,
       hasFree,
       bingoCount: progress.bingoCount,
-      achievedAtStep: progress.achievedAtStep,
+      achievedAtTime: progress.achievedAtTime,
       cardMarkedNumbers
     });
   });
 
-  // --- ランキング生成 ---
   const mode = rankingMode.value;
   const targetB = Number.parseInt(targetBingoNum.value, 10);
 
   let sortedRanking = [...cardStats];
 
   if (mode === 'count') {
-    // ビンゴ数が多い順
     sortedRanking.sort((a, b) => b.bingoCount - a.bingoCount);
   } else if (mode === 'speed') {
-    // 指定されたビンゴ数に「早い順（手数が少ない順）」でソート
+    // 達成タイムスタンプ順（早い時刻ほど上）
     sortedRanking.sort((a, b) => {
-      const stepA = a.achievedAtStep[targetB];
-      const stepB = b.achievedAtStep[targetB];
-      if (stepA !== undefined && stepB !== undefined) return stepA - stepB;
-      if (stepA !== undefined) return -1; // 達成している方が上
-      if (stepB !== undefined) return 1;
-      return b.bingoCount - a.bingoCount; // 未達なら全体のビンゴ数順
+      const timeA = a.achievedAtTime[targetB];
+      const timeB = b.achievedAtTime[targetB];
+      if (timeA && timeB) return timeA.localeCompare(timeB);
+      if (timeA) return -1;
+      if (timeB) return 1;
+      return b.bingoCount - a.bingoCount;
     });
   }
 
@@ -470,8 +458,8 @@ function renderAll() {
 
       let detailText = `ビンゴ数: ${stat.bingoCount}`;
       if (mode === 'speed') {
-        const steps = stat.achievedAtStep[targetB];
-        detailText = steps !== undefined ? `${targetB}ビンゴ達成 (${steps}手目)` : `${targetB}ビンゴ未達成 (現在${stat.bingoCount}ビンゴ)`;
+        const t = stat.achievedAtTime[targetB];
+        detailText = t ? `${targetB}ビンゴ達成 (時刻: ${t})` : `${targetB}ビンゴ未達成`;
       }
 
       item.innerHTML = `
@@ -485,7 +473,6 @@ function renderAll() {
     });
   }
 
-  // --- カード一覧生成（検索フィルター適用） ---
   let displayedCards = cardStats;
   if (selectedSearchNumber !== null) {
     displayedCards = cardStats.filter(stat => stat.cardMarkedNumbers.has(selectedSearchNumber));
@@ -522,8 +509,13 @@ function renderAll() {
         } else {
           const val = stat.values[valueIndex++];
           miniCell.textContent = val;
-          if (Array.isArray(stat.marked) && stat.marked.includes(i)) {
+          const isMarked = Array.isArray(stat.marked) && stat.marked.includes(i);
+          if (isMarked) {
             miniCell.classList.add('marked');
+            // 不正検知：マークされているのに公式の抽選リストにない数字は赤くする
+            if (!officialDrawnSet.has(val)) {
+              miniCell.classList.add('cheated');
+            }
           }
         }
         miniBoard.appendChild(miniCell);
@@ -533,7 +525,6 @@ function renderAll() {
     });
   }
 
-  // 破られた数字の一覧チップ描画
   markedNumbersList.replaceChildren();
   if (globalMarkedSet.size === 0) {
     markedNumbersList.innerHTML = '<span style="color: #888; font-size: 0.85rem;">まだ破られた数字はありません</span>';
@@ -544,9 +535,8 @@ function renderAll() {
       chip.className = 'marked-chip' + (selectedSearchNumber === num ? ' active' : '');
       chip.textContent = num;
       chip.addEventListener('click', () => {
-        if (selectedSearchNumber === num) {
-          clearSearch();
-        } else {
+        if (selectedSearchNumber === num) clearSearch();
+        else {
           selectedSearchNumber = num;
           searchInput.value = num;
           renderAll();
@@ -561,24 +551,15 @@ function renderAll() {
   }
 }
 
-// ランキングモード変更時の表示切り替え
 rankingMode.addEventListener('change', () => {
-  if (rankingMode.value === 'speed') {
-    targetBingoNum.style.display = 'inline-block';
-  } else {
-    targetBingoNum.style.display = 'none';
-  }
+  targetBingoNum.style.display = rankingMode.value === 'speed' ? 'inline-block' : 'none';
   renderAll();
 });
-
 targetBingoNum.addEventListener('change', renderAll);
 
 function executeSearch() {
   const val = searchInput.value.trim();
-  if (val === '') {
-    clearSearch();
-    return;
-  }
+  if (val === '') { clearSearch(); return; }
   selectedSearchNumber = Number.parseInt(val, 10);
   renderAll();
 }
@@ -591,15 +572,12 @@ function clearSearch() {
 
 searchBtn.addEventListener('click', executeSearch);
 clearSearchBtn.addEventListener('click', clearSearch);
-searchInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') executeSearch();
-});
+searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') executeSearch(); });
 
 function openModal(id) {
   currentModalId = id;
   const data = allData[id];
   if (!data) return;
-
   modalTitle.textContent = `ID: ${id} の詳細`;
   updateModalContent(data);
   modal.hidden = false;
@@ -623,25 +601,20 @@ function updateModalContent(data) {
     } else {
       const val = values[valueIndex++];
       cell.innerHTML = `<span>${val}</span>`;
-      if (Array.isArray(marked) && marked.includes(i)) {
+      const isMarked = Array.isArray(marked) && marked.includes(i);
+      if (isMarked) {
         cell.classList.add('marked');
+        if (!officialDrawnSet.has(val)) {
+          cell.classList.add('cheated');
+        }
       }
     }
     modalBoard.appendChild(cell);
   }
 }
 
-closeModalBtn.addEventListener('click', () => {
-  modal.hidden = true;
-  currentModalId = null;
-});
-
-modal.addEventListener('click', (e) => {
-  if (e.target === modal) {
-    modal.hidden = true;
-    currentModalId = null;
-  }
-});
+closeModalBtn.addEventListener('click', () => { modal.hidden = true; currentModalId = null; });
+modal.addEventListener('click', (e) => { if (e.target === modal) { modal.hidden = true; currentModalId = null; } });
 
 fetchAllData();
 setInterval(fetchAllData, 2000);
