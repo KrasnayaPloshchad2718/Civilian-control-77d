@@ -170,9 +170,9 @@ const resetBtn = document.getElementById('resetBtn');
 const resetHint = document.getElementById('resetHint');
 const historyList = document.getElementById('historyList');
 
-const STORAGE_KEY_LOTTERY = 'bingo_lottery_state_v1';
+const STORAGE_KEY_LOTTERY = 'bingo_lottery_state_v2';
 
-let maxNumber = 75; // デフォルト (5×5の3倍)
+let maxNumber = 75; // デフォルト
 let availableNumbers = [];
 let drawnHistory = [];
 
@@ -205,6 +205,8 @@ function clearLotteryState() {
 }
 
 async function initLottery() {
+  let calculatedMaxNumber = 75;
+
   try {
     const res = await fetch('/api/get_all');
     if (!res.ok) throw new Error('Failed to fetch');
@@ -214,6 +216,7 @@ async function initLottery() {
     let bestSheet = null;
     let bestId = null;
 
+    // 最もマス目数（サイズ）が大きい用紙を探す
     Object.keys(allData).forEach(id => {
       const sheet = allData[id];
       if (sheet && sheet.side > maxSide) {
@@ -223,20 +226,21 @@ async function initLottery() {
       }
     });
 
-    if (bestSheet && Array.isArray(bestSheet.values)) {
-      maxNumber = Math.max(...bestSheet.values);
-      infoPanel.textContent = `基準シート: ID ${bestId} (サイズ ${maxSide} × ${maxSide}) ｜ 範囲: 0 〜 ${maxNumber}`;
+    if (bestSheet && typeof bestSheet.side === 'number') {
+      // ご要望通り「最大使われる可能性がある数字」＝ マス総数の3倍 (side * side * 3) を上限とする
+      calculatedMaxNumber = bestSheet.side * bestSheet.side * 3;
+      infoPanel.textContent = `基準シート: ID ${bestId} (サイズ ${bestSheet.side} × ${bestSheet.side}) ｜ 範囲: 0 〜 ${calculatedMaxNumber}`;
     } else {
-      maxNumber = 75;
       infoPanel.textContent = `有効なシートが見つからないため、デフォルト範囲 (0 〜 75) で抽選します。`;
     }
   } catch (err) {
-    maxNumber = 75;
     infoPanel.textContent = `データ取得エラー（デフォルト範囲 0 〜 75 で動作します）`;
   }
 
   const savedState = loadLotteryState();
-  if (savedState && typeof savedState.maxNumber === 'number') {
+  
+  // 保存されているデータがある場合でも、サイズ変更等で上限が変わっていればリフレッシュするかチェック
+  if (savedState && typeof savedState.maxNumber === 'number' && savedState.maxNumber === calculatedMaxNumber) {
     maxNumber = savedState.maxNumber;
     availableNumbers = savedState.availableNumbers || [];
     drawnHistory = savedState.drawnHistory || [];
@@ -248,6 +252,8 @@ async function initLottery() {
     }
     updateHistoryUI();
   } else {
+    // 最大値が変わっている、または保存データがない場合は新しく初期化
+    maxNumber = calculatedMaxNumber;
     resetAvailableNumbers();
   }
 
