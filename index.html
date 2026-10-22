@@ -22,8 +22,8 @@ body {
   color: var(--text);
 }
 button, input, select { font: inherit; }
-#app { min-height: 100vh; padding: 16px; }
-main { width: min(100%, 800px); margin: 0 auto; }
+#app { min-height: 100vh; padding: 16px; display: flex; flex-direction: column; }
+main { width: min(100%, 800px); margin: 0 auto; flex: 1; display: flex; flex-direction: column; }
 header { margin-bottom: 20px; }
 h1 {
   margin: 0;
@@ -31,11 +31,33 @@ h1 {
   font-weight: 700;
   letter-spacing: -.03em;
 }
+
+/* 作成画面の中央配置用スタイル */
+#setup.screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 20px;
+  padding-bottom: 40px;
+}
+#setup .controls {
+  justify-content: center;
+}
+#setup .action-row {
+  justify-content: center;
+  width: 100%;
+}
+#setup button {
+  width: min(100%, 200px);
+}
+
 .controls {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
-  margin-bottom: 16px;
   flex-wrap: wrap;
 }
 label {
@@ -81,7 +103,6 @@ select:focus-visible {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
 }
 .screen[hidden] { display: none; }
 .board-top {
@@ -175,9 +196,9 @@ select:focus-visible {
 <!-- 作成画面 -->
 <section id="setup" class="screen" aria-label="作成画面">
   <section class="controls" aria-label="シート設定">
-    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+    <div style="display: flex; gap: 15px; flex-wrap: wrap; justify-content: center;">
       <div>
-        <label for="sheetId">ID (2桁)</label>
+        <label for="sheetId">ID (2桁)</label><br>
         <input
           id="sheetId"
           type="number"
@@ -189,11 +210,11 @@ select:focus-visible {
         >
       </div>
       <div>
-        <label for="side">サイズ</label>
+        <label for="side">サイズ (4〜20)</label><br>
         <input
           id="side"
           type="number"
-          min="5"
+          min="4"
           max="20"
           step="1"
           value="5"
@@ -407,7 +428,7 @@ function buildBoard() {
 
   let n = Number.parseInt(sideInput.value, 10);
   if (!Number.isFinite(n)) n = 5;
-  n = Math.max(5, Math.min(20, Math.floor(n)));
+  n = Math.max(4, Math.min(20, Math.floor(n))); // 下限を4に設定
   sideInput.value = n;
 
   const hasFree = n % 2 === 1;
@@ -463,7 +484,7 @@ function handleReset() {
     return;
   }
 
-  clearState(); // ここでサーバーへ削除通知も行われます
+  clearState();
   board.replaceChildren();
   board.style.gridTemplateColumns = '';
   counter.textContent = '0';
