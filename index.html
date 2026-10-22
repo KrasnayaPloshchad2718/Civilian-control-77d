@@ -32,10 +32,8 @@ h1 {
   letter-spacing: -.03em;
 }
 
-/* 非表示属性の優先度をアップ */
 .screen[hidden] { display: none !important; }
 
-/* 作成画面の中央配置用スタイル */
 #setup.screen {
   flex: 1;
   display: flex;
@@ -267,7 +265,6 @@ let resetClicks = 0;
 const RESET_REQUIRED = 3;
 const STORAGE_KEY = 'bingo_sheet_state_v2';
 
-// ランダムシャッフル
 function shuffled(values) {
   for (let i = values.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -276,7 +273,6 @@ function shuffled(values) {
   return values;
 }
 
-// 状態保存 & APIアップロード
 function saveState() {
   if (!currentState) return;
   const jsonStr = JSON.stringify(currentState);
@@ -290,9 +286,7 @@ function saveState() {
   if (currentState.id) {
     fetch(`/api/upload?id=${currentState.id}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: jsonStr
     }).catch(err => {
       console.error('API upload failed:', err);
@@ -300,7 +294,6 @@ function saveState() {
   }
 }
 
-// 状態読み込み
 function loadState() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -311,7 +304,6 @@ function loadState() {
   }
 }
 
-// 状態削除 & API側への削除通知
 function clearState() {
   if (currentState && currentState.id) {
     fetch(`/api/delete?id=${currentState.id}`, {
@@ -326,14 +318,12 @@ function clearState() {
   } catch (e) {}
 }
 
-// マス数更新
 function updateCounter() {
   counter.textContent = String(
     board.querySelectorAll('.cell.marked').length
   );
 }
 
-// 盤面の描画・生成
 function renderBoard() {
   if (!currentState) return;
 
@@ -421,7 +411,6 @@ function renderBoard() {
   gameScreen.hidden = false;
 }
 
-// 新規作成
 function buildBoard() {
   let idVal = Number.parseInt(sheetIdInput.value, 10);
   if (!Number.isFinite(idVal)) idVal = 10;
@@ -436,10 +425,8 @@ function buildBoard() {
   const hasFree = n % 2 === 1;
   const total = n * n - (hasFree ? 1 : 0);
 
-  const maxNumber = Math.max(
-    99,
-    Math.ceil((total + 1) / 100) * 100 - 1
-  );
+  // マスの総数 (n * n) の3倍を最大値とする
+  const maxNumber = n * n * 3;
 
   const numbers = Array.from(
     { length: maxNumber + 1 },
@@ -460,7 +447,6 @@ function buildBoard() {
   renderBoard();
 }
 
-// リセットボタン表示更新
 function updateResetButton() {
   const remaining = RESET_REQUIRED - resetClicks;
 
@@ -477,7 +463,6 @@ function updateResetButton() {
   }
 }
 
-// リセット処理
 function handleReset() {
   resetClicks++;
 
@@ -502,11 +487,9 @@ function handleReset() {
   setupScreen.hidden = false;
 }
 
-// イベントリスナー
 document.getElementById('generate').addEventListener('click', buildBoard);
 resetButton.addEventListener('click', handleReset);
 
-// 初期読み込み処理
 function init() {
   const savedState = loadState();
   if (savedState) {

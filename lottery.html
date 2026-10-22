@@ -37,7 +37,6 @@ h1 { margin: 0; font-size: 1.4rem; }
   font-size: 0.9rem;
 }
 
-/* 抽選数字の巨大表示エリア */
 .lottery-display {
   flex: 1;
   display: flex;
@@ -102,7 +101,6 @@ button:active { transform: scale(.98); }
   border-color: #8b2525;
 }
 
-/* 履歴エリア（大きく表示） */
 .history-panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -142,7 +140,6 @@ button:active { transform: scale(.98); }
   基準データを確認中...
 </section>
 
-<!-- 巨大数字表示 -->
 <section class="lottery-display">
   <div class="draw-label">抽出した番号</div>
   <p id="currentNumber">-</p>
@@ -175,48 +172,38 @@ const historyList = document.getElementById('historyList');
 
 const STORAGE_KEY_LOTTERY = 'bingo_lottery_state_v1';
 
-let maxNumber = 99;
+let maxNumber = 75; // デフォルト (5×5の3倍)
 let availableNumbers = [];
 let drawnHistory = [];
 
 let resetClicks = 0;
-const RESET_REQUIRED = 5; // 5回タップが必要
+const RESET_REQUIRED = 5;
 
-// 状態を localStorage に保存
 function saveLotteryState() {
   try {
-    const state = {
-      maxNumber,
-      availableNumbers,
-      drawnHistory
-    };
+    const state = { maxNumber, availableNumbers, drawnHistory };
     localStorage.setItem(STORAGE_KEY_LOTTERY, JSON.stringify(state));
   } catch (e) {
     console.error('Failed to save lottery state:', e);
   }
 }
 
-// 状態を localStorage から読み込み
 function loadLotteryState() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY_LOTTERY);
-    if (saved) {
-      return JSON.parse(saved);
-    }
+    if (saved) return JSON.parse(saved);
   } catch (e) {
     console.error('Failed to load lottery state:', e);
   }
   return null;
 }
 
-// 状態を削除
 function clearLotteryState() {
   try {
     localStorage.removeItem(STORAGE_KEY_LOTTERY);
   } catch (e) {}
 }
 
-// 初期化（サーバーから最大値決定 ＆ キャッシュ復元）
 async function initLottery() {
   try {
     const res = await fetch('/api/get_all');
@@ -240,12 +227,12 @@ async function initLottery() {
       maxNumber = Math.max(...bestSheet.values);
       infoPanel.textContent = `基準シート: ID ${bestId} (サイズ ${maxSide} × ${maxSide}) ｜ 範囲: 0 〜 ${maxNumber}`;
     } else {
-      maxNumber = 99;
-      infoPanel.textContent = `有効なシートが見つからないため、デフォルト範囲 (0 〜 99) で抽選します。`;
+      maxNumber = 75;
+      infoPanel.textContent = `有効なシートが見つからないため、デフォルト範囲 (0 〜 75) で抽選します。`;
     }
   } catch (err) {
-    maxNumber = 99;
-    infoPanel.textContent = `データ取得エラー（デフォルト範囲 0 〜 99 で動作します）`;
+    maxNumber = 75;
+    infoPanel.textContent = `データ取得エラー（デフォルト範囲 0 〜 75 で動作します）`;
   }
 
   const savedState = loadLotteryState();
@@ -267,7 +254,6 @@ async function initLottery() {
   statusEl.textContent = '準備完了';
 }
 
-// 利用可能な番号リストを初期化 (0 〜 maxNumber)
 function resetAvailableNumbers() {
   availableNumbers = Array.from({ length: maxNumber + 1 }, (_, i) => i);
   drawnHistory = [];
@@ -276,7 +262,6 @@ function resetAvailableNumbers() {
   saveLotteryState();
 }
 
-// 番号を引く
 function drawNumber() {
   if (availableNumbers.length === 0) {
     alert('すべての番号を抽出し尽くしました！');
@@ -292,7 +277,6 @@ function drawNumber() {
   saveLotteryState();
 }
 
-// 履歴UIの更新（大きく見やすく）
 function updateHistoryUI() {
   historyList.replaceChildren();
   if (drawnHistory.length === 0) {
@@ -308,7 +292,6 @@ function updateHistoryUI() {
   });
 }
 
-// リセットボタンの処理（5回タップ必須）
 function handleReset() {
   resetClicks++;
   const remaining = RESET_REQUIRED - resetClicks;
@@ -330,7 +313,6 @@ function handleReset() {
 drawBtn.addEventListener('click', drawNumber);
 resetBtn.addEventListener('click', handleReset);
 
-// 初期化実行
 initLottery();
 </script>
 </body>
