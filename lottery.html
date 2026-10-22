@@ -102,29 +102,31 @@ button:active { transform: scale(.98); }
   border-color: #8b2525;
 }
 
-/* 履歴エリア */
+/* 履歴エリア（大きく表示） */
 .history-panel {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 12px 16px;
+  padding: 16px;
 }
-.history-panel h3 { margin: 0 0 8px 0; font-size: 0.9rem; color: #888; }
+.history-panel h3 { margin: 0 0 12px 0; font-size: 1rem; color: #888; }
 #historyList {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  max-height: 100px;
+  gap: 10px;
+  max-height: 220px;
   overflow-y: auto;
 }
 .history-chip {
   background: var(--bg);
-  border: 1px solid var(--border);
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 600;
+  border: 2px solid var(--border);
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 1.8rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+  min-width: 70px;
+  text-align: center;
 }
 #status { font-size: 0.85rem; color: #888; }
 </style>
@@ -155,7 +157,7 @@ button:active { transform: scale(.98); }
 <div class="history-panel">
   <h3>これまでに引いた番号の履歴</h3>
   <div id="historyList">
-    <span style="color:#888; font-size:0.85rem;">まだ番号を引いていません</span>
+    <span style="color:#888; font-size:0.9rem;">まだ番号を引いていません</span>
   </div>
 </div>
 </main>
@@ -246,7 +248,6 @@ async function initLottery() {
     infoPanel.textContent = `データ取得エラー（デフォルト範囲 0 〜 99 で動作します）`;
   }
 
-  // 保存された状態があれば復元、なければ新規初期化
   const savedState = loadLotteryState();
   if (savedState && typeof savedState.maxNumber === 'number') {
     maxNumber = savedState.maxNumber;
@@ -291,11 +292,11 @@ function drawNumber() {
   saveLotteryState();
 }
 
-// 履歴UIの更新
+// 履歴UIの更新（大きく見やすく）
 function updateHistoryUI() {
   historyList.replaceChildren();
   if (drawnHistory.length === 0) {
-    historyList.innerHTML = '<span style="color:#888; font-size:0.85rem;">まだ番号を引いていません</span>';
+    historyList.innerHTML = '<span style="color:#888; font-size:0.9rem;">まだ番号を引いていません</span>';
     return;
   }
 
