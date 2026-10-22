@@ -32,6 +32,9 @@ h1 {
   letter-spacing: -.03em;
 }
 
+/* 非表示属性の優先度をアップ */
+.screen[hidden] { display: none !important; }
+
 /* 作成画面の中央配置用スタイル */
 #setup.screen {
   flex: 1;
@@ -104,7 +107,6 @@ select:focus-visible {
   gap: 8px;
   flex-wrap: wrap;
 }
-.screen[hidden] { display: none; }
 .board-top {
   display: flex;
   justify-content: space-between;
@@ -428,7 +430,7 @@ function buildBoard() {
 
   let n = Number.parseInt(sideInput.value, 10);
   if (!Number.isFinite(n)) n = 5;
-  n = Math.max(4, Math.min(20, Math.floor(n))); // 下限を4に設定
+  n = Math.max(4, Math.min(20, Math.floor(n)));
   sideInput.value = n;
 
   const hasFree = n % 2 === 1;
