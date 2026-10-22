@@ -153,7 +153,7 @@ h1 { margin: 0; font-size: 1.4rem; }
 .mini-cell.free { font-size: 0.5rem; font-weight: bold; background: var(--border); }
 .mini-cell.marked { background: light-dark(#e7e7e7, #343434); color: light-dark(#666, #bbb); text-decoration: line-through; }
 /* 不正検知されたマーク（プレイヤーには見えないがビューアーで赤くする） */
-.mini-cell.cheated { background: #8b2525 !important; color: #fff !important; border-color: #ff4d4d !important; }
+.mini-cell.cheated { background: #8b2525 !important; color: #fff !important; border-color: #ff4d4d !important; text-decoration: line-through; }
 
 .modal {
   position: fixed;
@@ -286,8 +286,8 @@ const modalTitle = document.getElementById('modalTitle');
 const modalBoard = document.getElementById('modalBoard');
 
 let allData = {};
-let officialDrawnSet = new Set(); // サーバーから取得した正式な抽選数字のセット
-let lotteryHistoryMap = {}; // 抽選された時刻のマップ { 数字: 時刻文字列 }
+let officialDrawnSet = new Set();
+let lotteryHistoryMap = {};
 let currentModalId = null;
 let selectedSearchNumber = null;
 
@@ -322,7 +322,7 @@ function analyzeBingoProgress(side, marked, values, hasFree) {
   for (let i = 0; i < n; i++) diag2.push(i * n + (n - 1 - i));
   lines.push(diag2);
 
-  const achievedAtTime = {}; // { 1: "HH:MM:SS", ... }
+  const achievedAtTime = {};
   const currentMarked = new Set();
   if (freeIndex !== -1) currentMarked.add(freeIndex);
 
@@ -343,7 +343,7 @@ function analyzeBingoProgress(side, marked, values, hasFree) {
 
     for (let b = currentBingoCount + 1; b <= newCount; b++) {
       if (!achievedAtTime[b]) {
-        achievedAtTime[b] = drawTime; // 最初にそのビンゴ数に到達したときの抽選時刻
+        achievedAtTime[b] = drawTime;
       }
     }
     currentBingoCount = newCount;
@@ -354,7 +354,6 @@ function analyzeBingoProgress(side, marked, values, hasFree) {
 
 async function fetchAllData() {
   try {
-    // ビンゴデータと抽選データを並行取得
     const [resCards, resLottery] = await Promise.all([
       fetch('/api/get_all'),
       fetch('/api/lottery/get')
@@ -369,7 +368,9 @@ async function fetchAllData() {
       lotteryHistoryMap = {};
       if (Array.isArray(lotteryData.drawnHistory)) {
         lotteryData.drawnHistory.forEach(item => {
-          officialDrawnSet.add(item.num);
+          // item.num が数値または文字列で入るため両方に対応
+          officialDrawnSet.add(Number(item.num));
+          officialDrawnSet.add(String(item.num));
           lotteryHistoryMap[item.num] = item.time;
         });
       }
@@ -438,7 +439,6 @@ function renderAll() {
   if (mode === 'count') {
     sortedRanking.sort((a, b) => b.bingoCount - a.bingoCount);
   } else if (mode === 'speed') {
-    // 達成タイムスタンプ順（早い時刻ほど上）
     sortedRanking.sort((a, b) => {
       const timeA = a.achievedAtTime[targetB];
       const timeB = b.achievedAtTime[targetB];
@@ -512,8 +512,8 @@ function renderAll() {
           const isMarked = Array.isArray(stat.marked) && stat.marked.includes(i);
           if (isMarked) {
             miniCell.classList.add('marked');
-            // 不正検知：マークされているのに公式の抽選リストにない数字は赤くする
-            if (!officialDrawnSet.has(val)) {
+            // 正式な抽選リストに含まれているかチェック（数値・文字列の両方で判定）
+            if (!officialDrawnSet.has(val) && !officialDrawnSet.has(String(val))) {
               miniCell.classList.add('cheated');
             }
           }
@@ -604,7 +604,7 @@ function updateModalContent(data) {
       const isMarked = Array.isArray(marked) && marked.includes(i);
       if (isMarked) {
         cell.classList.add('marked');
-        if (!officialDrawnSet.has(val)) {
+        if (!officialDrawnSet.has(val) && !officialDrawnSet.has(String(val))) {
           cell.classList.add('cheated');
         }
       }

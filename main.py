@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 import os
 
-app = FastAPI
+app = FastAPI()
 
 # データを保存するメモリ上のストア
 bingo_data_store = {}
@@ -58,7 +58,8 @@ async def get_all_data():
 @app.post("/api/lottery/upload")
 async def upload_lottery(data: dict = None):
   global lottery_data_store
-  lottery_data_store = data
+  if data:
+    lottery_data_store = data
   return {"status": "success"}
 
 
