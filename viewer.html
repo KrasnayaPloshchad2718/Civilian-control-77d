@@ -25,8 +25,8 @@ main { width: min(100%, 1200px); margin: 0 auto; }
 header { margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
 h1 { margin: 0; font-size: 1.4rem; }
 
-/* 破られた数字の一覧・検索パネル */
-.global-marked-panel {
+/* パネル共通 */
+.panel {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -41,7 +41,7 @@ h1 { margin: 0; font-size: 1.4rem; }
   gap: 10px;
   margin-bottom: 10px;
 }
-.global-marked-panel h3 {
+.panel h3 {
   margin: 0;
   font-size: 0.95rem;
 }
@@ -50,8 +50,7 @@ h1 { margin: 0; font-size: 1.4rem; }
   gap: 6px;
   align-items: center;
 }
-.search-box input {
-  width: 110px;
+.search-box input, .search-box select {
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -87,13 +86,35 @@ h1 { margin: 0; font-size: 1.4rem; }
   cursor: pointer;
   transition: background 0.15s;
 }
-.marked-chip:hover {
-  background: var(--border);
+.marked-chip:hover { background: var(--border); }
+.marked-chip.active { background: #8b2525; color: #fff; border-color: #8b2525; }
+
+/* ランキングエリア */
+.ranking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 250px;
+  overflow-y: auto;
 }
-.marked-chip.active {
-  background: #8b2525;
-  color: #fff;
-  border-color: #8b2525;
+.ranking-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+.ranking-info {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.rank-badge {
+  font-weight: 700;
+  min-width: 24px;
 }
 
 /* カードグリッド */
@@ -145,7 +166,7 @@ h1 { margin: 0; font-size: 1.4rem; }
 .mini-cell.free { font-size: 0.5rem; font-weight: bold; background: var(--border); }
 .mini-cell.marked { background: light-dark(#e7e7e7, #343434); color: light-dark(#666, #bbb); text-decoration: line-through; }
 
-/* モーダル（拡大表示） */
+/* モーダル */
 .modal {
   position: fixed;
   inset: 0;
@@ -213,8 +234,8 @@ h1 { margin: 0; font-size: 1.4rem; }
   <span id="status">読み込み中...</span>
 </header>
 
-<!-- 画面上部：破られた数字の一覧 & 検索パネル -->
-<section class="global-marked-panel">
+<!-- 破られた数字の一覧 & 検索パネル -->
+<section class="panel">
   <div class="panel-top">
     <h3>破られている数字（タップでその数字を持つIDを検索）</h3>
     <div class="search-box">
@@ -224,6 +245,30 @@ h1 { margin: 0; font-size: 1.4rem; }
     </div>
   </div>
   <div id="markedNumbersList">
+    <span style="color: #888; font-size: 0.85rem;">データがありません</span>
+  </div>
+</section>
+
+<!-- ランキング機能パネル -->
+<section class="panel">
+  <div class="panel-top">
+    <h3>ビンゴ ランキング</h3>
+    <div class="search-box">
+      <label for="rankingMode" style="font-size:0.85rem; font-weight:600;">モード:</label>
+      <select id="rankingMode">
+        <option value="count">ビンゴ数順</option>
+        <option value="speed">指定ビンゴ達成早い順</option>
+      </select>
+      <select id="targetBingoNum" style="display:none;">
+        <option value="1">1 ビンゴ</option>
+        <option value="2">2 ビンゴ</option>
+        <option value="3">3 ビンゴ</option>
+        <option value="4">4 ビンゴ</option>
+        <option value="5">5 ビンゴ</option>
+      </select>
+    </div>
+  </div>
+  <div id="rankingList" class="ranking-list">
     <span style="color: #888; font-size: 0.85rem;">データがありません</span>
   </div>
 </section>
@@ -255,6 +300,10 @@ const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const clearSearchBtn = document.getElementById('clearSearchBtn');
 
+const rankingMode = document.getElementById('rankingMode');
+const targetBingoNum = document.getElementById('targetBingoNum');
+const rankingList = document.getElementById('rankingList');
+
 const modal = document.getElementById('modal');
 const closeModalBtn = document.getElementById('closeModal');
 const modalTitle = document.getElementById('modalTitle');
@@ -262,7 +311,7 @@ const modalBoard = document.getElementById('modalBoard');
 
 let allData = {};
 let currentModalId = null;
-let selectedSearchNumber = null; // 検索で選択されている数字
+let selectedSearchNumber = null;
 
 // セルのインデックスから実際の数値を逆算
 function getNumberFromIndex(n, values, index) {
@@ -273,49 +322,64 @@ function getNumberFromIndex(n, values, index) {
   return values[valIndex];
 }
 
-// ビンゴ数計算
-function calculateBingoCount(side, marked, hasFree) {
-  let count = 0;
+// ビンゴ数および、各ビンゴ数を何個目のマークで達成したかをシミュレーション計算する関数
+function analyzeBingoProgress(side, marked, hasFree) {
   const n = side;
   const freeIndex = hasFree ? Math.floor((n * n) / 2) : -1;
 
-  function isMarked(idx) {
-    if (idx === freeIndex) return true;
-    return Array.isArray(marked) && marked.includes(idx);
-  }
-
+  // すべてのラインの定義（インデックスの配列のリスト）
+  const lines = [];
   for (let r = 0; r < n; r++) {
-    let line = true;
-    for (let c = 0; c < n; c++) {
-      if (!isMarked(r * n + c)) { line = false; break; }
-    }
-    if (line) count++;
+    const line = [];
+    for (let c = 0; c < n; c++) line.push(r * n + c);
+    lines.push(line);
   }
-
   for (let c = 0; c < n; c++) {
-    let line = true;
-    for (let r = 0; r < n; r++) {
-      if (!isMarked(r * n + c)) { line = false; break; }
+    const line = [];
+    for (let r = 0; r < n; r++) line.push(r * n + c);
+    lines.push(line);
+  }
+  const diag1 = [];
+  for (let i = 0; i < n; i++) diag1.push(i * n + i);
+  lines.push(diag1);
+
+  const diag2 = [];
+  for (let i = 0; i < n; i++) diag2.push(i * n + (n - 1 - i));
+  lines.push(diag2);
+
+  // marked の順序をそのまま適用していき、各ビンゴ数が何手目で完成したかを記録する
+  const achievedAtStep = {}; // { 1: 手数, 2: 手数, ... }
+  const currentMarked = new Set();
+  if (freeIndex !== -1) currentMarked.add(freeIndex);
+
+  let currentBingoCount = 0;
+  const markedList = Array.isArray(marked) ? marked : [];
+
+  for (let step = 0; step < markedList.length; step++) {
+    const idx = markedList[step];
+    currentMarked.add(idx);
+
+    // 現在のビンゴ数を再計算
+    let newCount = 0;
+    lines.forEach(line => {
+      if (line.every(i => currentMarked.has(i))) newCount++;
+    });
+
+    // 新たに達成したビンゴ数があれば、その最初の手数を記録
+    for (let b = currentBingoCount + 1; b <= newCount; b++) {
+      if (!achievedAtStep[b]) {
+        achievedAtStep[b] = step + 1; // 1手目、2手目...
+      }
     }
-    if (line) count++;
+    currentBingoCount = newCount;
   }
 
-  let diag1 = true;
-  for (let i = 0; i < n; i++) {
-    if (!isMarked(i * n + i)) { diag1 = false; break; }
-  }
-  if (diag1) count++;
-
-  let diag2 = true;
-  for (let i = 0; i < n; i++) {
-    if (!isMarked(i * n + (n - 1 - i))) { diag2 = false; break; }
-  }
-  if (diag2) count++;
-
-  return count;
+  return {
+    bingoCount: currentBingoCount,
+    achievedAtStep
+  };
 }
 
-// データ取得
 async function fetchAllData() {
   try {
     const res = await fetch('/api/get_all');
@@ -328,20 +392,21 @@ async function fetchAllData() {
   }
 }
 
-// 全体描画
 function renderAll() {
   cardsGrid.replaceChildren();
-  
+  rankingList.replaceChildren();
+
   const ids = Object.keys(allData).map(Number).sort((a, b) => a - b);
   
   if (ids.length === 0) {
     cardsGrid.innerHTML = '<p style="color:#888; grid-column: 1/-1;">有効なビンゴデータがありません。</p>';
     markedNumbersList.innerHTML = '<span style="color: #888; font-size: 0.85rem;">データがありません</span>';
+    rankingList.innerHTML = '<span style="color: #888; font-size: 0.85rem;">データがありません</span>';
     return;
   }
 
   const globalMarkedSet = new Set();
-  const matchedIds = new Set();
+  const cardStats = [];
 
   ids.forEach(id => {
     const data = allData[id];
@@ -361,45 +426,103 @@ function renderAll() {
       });
     }
 
-    // 検索フィルター条件チェック
-    let matchesSearch = true;
-    if (selectedSearchNumber !== null) {
-      matchesSearch = cardMarkedNumbers.has(selectedSearchNumber);
-    }
+    const progress = analyzeBingoProgress(n, marked, hasFree);
 
-    if (matchesSearch) {
-      matchedIds.add(id);
+    cardStats.push({
+      id,
+      n,
+      values,
+      marked,
+      hasFree,
+      bingoCount: progress.bingoCount,
+      achievedAtStep: progress.achievedAtStep,
+      cardMarkedNumbers
+    });
+  });
 
-      const bingoCount = calculateBingoCount(n, marked, hasFree);
+  // --- ランキング生成 ---
+  const mode = rankingMode.value;
+  const targetB = Number.parseInt(targetBingoNum.value, 10);
 
+  let sortedRanking = [...cardStats];
+
+  if (mode === 'count') {
+    // ビンゴ数が多い順
+    sortedRanking.sort((a, b) => b.bingoCount - a.bingoCount);
+  } else if (mode === 'speed') {
+    // 指定されたビンゴ数に「早い順（手数が少ない順）」でソート
+    sortedRanking.sort((a, b) => {
+      const stepA = a.achievedAtStep[targetB];
+      const stepB = b.achievedAtStep[targetB];
+      if (stepA !== undefined && stepB !== undefined) return stepA - stepB;
+      if (stepA !== undefined) return -1; // 達成している方が上
+      if (stepB !== undefined) return 1;
+      return b.bingoCount - a.bingoCount; // 未達なら全体のビンゴ数順
+    });
+  }
+
+  if (sortedRanking.length === 0) {
+    rankingList.innerHTML = '<span style="color: #888; font-size: 0.85rem;">ランキングデータがありません</span>';
+  } else {
+    sortedRanking.forEach((stat, index) => {
+      const item = document.createElement('div');
+      item.className = 'ranking-item';
+
+      let detailText = `ビンゴ数: ${stat.bingoCount}`;
+      if (mode === 'speed') {
+        const steps = stat.achievedAtStep[targetB];
+        detailText = steps !== undefined ? `${targetB}ビンゴ達成 (${steps}手目)` : `${targetB}ビンゴ未達成 (現在${stat.bingoCount}ビンゴ)`;
+      }
+
+      item.innerHTML = `
+        <div class="ranking-info">
+          <span class="rank-badge">${index + 1}位</span>
+          <span><strong>ID: ${stat.id}</strong> (${stat.n}×${stat.n})</span>
+        </div>
+        <span style="font-size:0.85rem; color:#888;">${detailText}</span>
+      `;
+      rankingList.appendChild(item);
+    });
+  }
+
+  // --- カード一覧生成（検索フィルター適用） ---
+  let displayedCards = cardStats;
+  if (selectedSearchNumber !== null) {
+    displayedCards = cardStats.filter(stat => stat.cardMarkedNumbers.has(selectedSearchNumber));
+  }
+
+  if (displayedCards.length === 0) {
+    cardsGrid.innerHTML = `<p style="color:#888; grid-column: 1/-1;">数字「${selectedSearchNumber}」が破られているカードは見つかりませんでした。</p>`;
+  } else {
+    displayedCards.forEach(stat => {
       const card = document.createElement('div');
       card.className = 'card';
-      card.addEventListener('click', () => openModal(id));
+      card.addEventListener('click', () => openModal(stat.id));
 
       const cardHeader = document.createElement('div');
       cardHeader.className = 'card-header';
       cardHeader.innerHTML = `
-        <span>ID: ${id} (${n}×${n})</span>
-        <span class="bingo-badge">ビンゴ: ${bingoCount}</span>
+        <span>ID: ${stat.id} (${stat.n}×${stat.n})</span>
+        <span class="bingo-badge">ビンゴ: ${stat.bingoCount}</span>
       `;
       card.appendChild(cardHeader);
 
       const miniBoard = document.createElement('div');
       miniBoard.className = 'mini-board';
-      miniBoard.style.gridTemplateColumns = `repeat(${n}, minmax(0, 1fr))`;
+      miniBoard.style.gridTemplateColumns = `repeat(${stat.n}, minmax(0, 1fr))`;
 
       let valueIndex = 0;
-      for (let i = 0; i < n * n; i++) {
-        const isFree = hasFree && i === Math.floor((n * n) / 2);
+      for (let i = 0; i < stat.n * stat.n; i++) {
+        const isFree = stat.hasFree && i === Math.floor((stat.n * stat.n) / 2);
         const miniCell = document.createElement('div');
         miniCell.className = 'mini-cell' + (isFree ? ' free' : '');
 
         if (isFree) {
           miniCell.textContent = 'F';
         } else {
-          const val = values[valueIndex++];
+          const val = stat.values[valueIndex++];
           miniCell.textContent = val;
-          if (Array.isArray(marked) && marked.includes(i)) {
+          if (Array.isArray(stat.marked) && stat.marked.includes(i)) {
             miniCell.classList.add('marked');
           }
         }
@@ -407,11 +530,7 @@ function renderAll() {
       }
       card.appendChild(miniBoard);
       cardsGrid.appendChild(card);
-    }
-  });
-
-  if (cardsGrid.children.length === 0) {
-    cardsGrid.innerHTML = `<p style="color:#888; grid-column: 1/-1;">数字「${selectedSearchNumber}」が破られているカードは見つかりませんでした。</p>`;
+    });
   }
 
   // 破られた数字の一覧チップ描画
@@ -442,7 +561,18 @@ function renderAll() {
   }
 }
 
-// 検索実行
+// ランキングモード変更時の表示切り替え
+rankingMode.addEventListener('change', () => {
+  if (rankingMode.value === 'speed') {
+    targetBingoNum.style.display = 'inline-block';
+  } else {
+    targetBingoNum.style.display = 'none';
+  }
+  renderAll();
+});
+
+targetBingoNum.addEventListener('change', renderAll);
+
 function executeSearch() {
   const val = searchInput.value.trim();
   if (val === '') {
@@ -453,7 +583,6 @@ function executeSearch() {
   renderAll();
 }
 
-// 検索解除
 function clearSearch() {
   selectedSearchNumber = null;
   searchInput.value = '';
@@ -466,7 +595,6 @@ searchInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') executeSearch();
 });
 
-// モーダル操作
 function openModal(id) {
   currentModalId = id;
   const data = allData[id];
@@ -515,7 +643,6 @@ modal.addEventListener('click', (e) => {
   }
 });
 
-// 初回取得 & ポーリング
 fetchAllData();
 setInterval(fetchAllData, 2000);
 </script>
