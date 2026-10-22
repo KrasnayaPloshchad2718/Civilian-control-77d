@@ -258,14 +258,12 @@ function saveState() {
   if (!currentState) return;
   const jsonStr = JSON.stringify(currentState);
 
-  // 1. localStorage に保存
   try {
     localStorage.setItem(STORAGE_KEY, jsonStr);
   } catch (e) {
     console.error('LocalStorage save failed:', e);
   }
 
-  // 2. /api/upload?id={id} へアップロード
   if (currentState.id) {
     fetch(`/api/upload?id=${currentState.id}`, {
       method: 'POST',
@@ -290,8 +288,16 @@ function loadState() {
   }
 }
 
-// 状態削除
+// 状態削除 & API側への削除通知
 function clearState() {
+  if (currentState && currentState.id) {
+    fetch(`/api/delete?id=${currentState.id}`, {
+      method: 'DELETE'
+    }).catch(err => {
+      console.error('API delete failed:', err);
+    });
+  }
+
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch (e) {}
@@ -457,7 +463,7 @@ function handleReset() {
     return;
   }
 
-  clearState();
+  clearState(); // ここでサーバーへ削除通知も行われます
   board.replaceChildren();
   board.style.gridTemplateColumns = '';
   counter.textContent = '0';

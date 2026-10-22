@@ -44,6 +44,14 @@ async def get_all_data():
   """0〜99すべての保存データを一括返却"""
   return bingo_data_store
 
+@app.delete("/api/delete")
+async def delete_data(id: int = Query(...)):
+  """指定されたIDのデータを削除"""
+  if id in bingo_data_store:
+    del bingo_data_store[id]
+    return {"status": "deleted", "id": id}
+  return {"status": "not_found", "id": id}
+
 
 if __name__ == "__main__":
   import uvicorn
