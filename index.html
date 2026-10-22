@@ -217,7 +217,7 @@ select:focus-visible {
           min="4"
           max="20"
           step="1"
-          value="5"
+          value="4"
           aria-label="サイズ"
         >
       </div>
@@ -233,7 +233,7 @@ select:focus-visible {
 <section id="game" class="screen" hidden aria-label="ビンゴ画面">
   <section class="board-wrap" aria-label="ビンゴシート">
     <div class="board-top">
-      <strong id="boardTitle">5 × 5</strong>
+      <strong id="boardTitle">4 × 4</strong>
       <span id="counter" aria-live="polite">0</span>
     </div>
     <div id="board" role="group" aria-label="ビンゴのマス"></div>
@@ -411,22 +411,38 @@ function renderBoard() {
   gameScreen.hidden = false;
 }
 
-function buildBoard() {
+// サーバーから全体の最大サイズを取得して、抽選と同じロジックで数字範囲を決定して作成
+async function buildBoard() {
   let idVal = Number.parseInt(sheetIdInput.value, 10);
   if (!Number.isFinite(idVal)) idVal = 10;
   idVal = Math.max(10, Math.min(99, Math.floor(idVal)));
   sheetIdInput.value = idVal;
 
   let n = Number.parseInt(sideInput.value, 10);
-  if (!Number.isFinite(n)) n = 5;
+  if (!Number.isFinite(n)) n = 4;
   n = Math.max(4, Math.min(20, Math.floor(n)));
   sideInput.value = n;
 
+  // サーバー上の全ボードから最大サイズを取得するか、現在の設定サイズを基準にする
+  let maxSide = n;
+  try {
+    const res = await fetch('/api/get_all');
+    if (res.ok) {
+      const allData = await res.json();
+      Object.keys(allData).forEach(id => {
+        const sheet = allData[id];
+        if (sheet && sheet.side > maxSide) {
+          maxSide = sheet.side;
+        }
+      });
+    }
+  } catch (e) {}
+
+  // 抽選画面と同様に「最大のサイズの総マスの3倍」を数値プールの最大値とする
+  const maxNumber = maxSide * maxSide * 3;
+
   const hasFree = n % 2 === 1;
   const total = n * n - (hasFree ? 1 : 0);
-
-  // マスの総数 (n * n) の3倍を最大値とする
-  const maxNumber = n * n * 3;
 
   const numbers = Array.from(
     { length: maxNumber + 1 },
@@ -475,7 +491,7 @@ function handleReset() {
   board.replaceChildren();
   board.style.gridTemplateColumns = '';
   counter.textContent = '0';
-  boardTitle.textContent = '5 × 5';
+  boardTitle.textContent = '4 × 4';
   currentState = null;
   resetClicks = 0;
 

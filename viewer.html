@@ -152,7 +152,6 @@ h1 { margin: 0; font-size: 1.4rem; }
 }
 .mini-cell.free { font-size: 0.5rem; font-weight: bold; background: var(--border); }
 .mini-cell.marked { background: light-dark(#e7e7e7, #343434); color: light-dark(#666, #bbb); text-decoration: line-through; }
-/* 不正検知されたマーク（プレイヤーには見えないがビューアーで赤くする） */
 .mini-cell.cheated { background: #8b2525 !important; color: #fff !important; border-color: #ff4d4d !important; text-decoration: line-through; }
 
 .modal {
@@ -368,7 +367,6 @@ async function fetchAllData() {
       lotteryHistoryMap = {};
       if (Array.isArray(lotteryData.drawnHistory)) {
         lotteryData.drawnHistory.forEach(item => {
-          // item.num が数値または文字列で入るため両方に対応
           officialDrawnSet.add(Number(item.num));
           officialDrawnSet.add(String(item.num));
           lotteryHistoryMap[item.num] = item.time;
@@ -409,10 +407,11 @@ function renderAll() {
 
     if (Array.isArray(marked)) {
       marked.forEach(idx => {
+        // インデックスを実際の数字に変換して集約
         const num = getNumberFromIndex(n, values, idx);
         if (num !== 'FREE') {
-          globalMarkedSet.add(num);
-          cardMarkedNumbers.add(num);
+          globalMarkedSet.add(Number(num));
+          cardMarkedNumbers.add(Number(num));
         }
       });
     }
@@ -512,7 +511,6 @@ function renderAll() {
           const isMarked = Array.isArray(stat.marked) && stat.marked.includes(i);
           if (isMarked) {
             miniCell.classList.add('marked');
-            // 正式な抽選リストに含まれているかチェック（数値・文字列の両方で判定）
             if (!officialDrawnSet.has(val) && !officialDrawnSet.has(String(val))) {
               miniCell.classList.add('cheated');
             }
